@@ -1,33 +1,94 @@
 // index.js
-import { Command } from 'commander';
+
 import http from 'http';
-import fs from 'fs';
+import fs from 'fs/promises';
 import path from 'path';
+import { program } from 'commander';
 
-const program = new Command();
-
+// --------------------
+// 1️⃣ Підключення CLI через Commander
+// --------------------
 program
-  .requiredOption('-h, --host <string>', 'server host (e.g. localhost)')
-  .requiredOption('-p, --port <number>', 'server port (e.g. 3000)')
-  .requiredOption('-c, --cache <path>', 'cache directory path');
+  .requiredOption('-h, --host <string>', 'server host')
+  .requiredOption('-p, --port <number>', 'server port')
+  .requiredOption('-c, --cache <string>', 'cache directory path');
 
 program.parse(process.argv);
 const options = program.opts();
 
-// === Перевіряємо наявність директорії для кешу ===
-if (!fs.existsSync(options.cache)) {
-  console.log(`📁 Директорія "${options.cache}" не існує. Створюю...`);
-  fs.mkdirSync(options.cache, { recursive: true });
+const cacheDir = options.cache;
+
+// Створюємо кеш директорію, якщо її нема
+await fs.mkdir(cacheDir, { recursive: true });
+console.log(`Cache directory ready: ${cacheDir}`);
+
+// --------------------
+// 2️⃣ Функція для шляху до картинки
+// --------------------
+function getCacheFilePath(code) {
+  return path.join(cacheDir, `${code}.jpg`);
 }
 
-// === Створюємо простий HTTP сервер ===
-const server = http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-  res.end('Сервер працює успішно! ✅');
+// --------------------
+// 3️⃣ Створення HTTP-сервера
+// --------------------
+const server = http.createServer(async (req, res) => {
+  const urlParts = req.url.split('/');
+  const code = urlParts[1]; // /200 → "200"
+  if (!code) {
+    res.writeHead(400, { 'Content-Type': 'text/plain' });
+    res.end('Bad Request: missing code');
+    return;
+  }
+
+  const filePath = getCacheFilePath(code);
+
+  try {
+    if (req.method === 'GET') {
+      // Читаємо картинку
+      const data = await fs.readFile(filePath);
+      res.writeHead(200, { 'Content-Type': 'image/jpeg' });
+      res.end(data);
+
+    } else if (req.method === 'PUT') {
+      // Записуємо картинку з тіла запиту
+      const chunks = [];
+      for await (const chunk of req) {
+        chunks.push(chunk);
+      }
+      const buffer = Buffer.concat(chunks);
+      await fs.writeFile(filePath, buffer);
+      res.writeHead(201, { 'Content-Type': 'text/plain' });
+      res.end('Created');
+
+    } else if (req.method === 'DELETE') {
+      // Видаляємо картинку
+      await fs.unlink(filePath);
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('Deleted');
+
+    } else {
+      // Інші методи
+      res.writeHead(405, { 'Content-Type': 'text/plain' });
+      res.end('Method not allowed');
+    }
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      // Файл не знайдено
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('Not Found');
+    } else {
+      // Інші помилки
+      console.error(err);
+      res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.end('Internal Server Error');
+    }
+  }
 });
 
-// === Запускаємо сервер ===
+// --------------------
+// 4️⃣ Запуск сервера
+// --------------------
 server.listen(options.port, options.host, () => {
-  console.log(`🚀 Сервер запущено на http://${options.host}:${options.port}`);
-  console.log(`🗂️ Кеш директорія: ${path.resolve(options.cache)}`);
+  console.log(`Server running at http://${options.host}:${options.port}/`);
 });
