@@ -1,27 +1,21 @@
 {
   "name": "backend-course-2025-5",
   "version": "1.0.0",
-  "description": "",
+  "description": "CLI та веб-сервер для лабораторної частини 1 (Commander.js, HTTP, Nodemon)",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Angelina2322/backend-course-2025-5.git"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
   "keywords": [],
-  "author": "",
+  "author": "Ангеліна bc2024-5",
   "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/Angelina2322/backend-course-2025-5/issues"
-  },
-  "homepage": "https://github.com/Angelina2322/backend-course-2025-5#readme",
   "dependencies": {
-    "commander": "^14.0.2",
-    "superagent": "^10.2.3"
+    "commander": "^12.1.0",
+    "superagent": "^10.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10"
+    "nodemon": "^3.1.0"
   }
 }
