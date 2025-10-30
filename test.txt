@@ -1,0 +1,14 @@
+# PUT — записуємо/створюємо файл у кеш
+curl -v -X PUT --data-binary @200.jpg http://localhost:3000/200
+
+# GET — отримуємо файл з кешу
+curl -v http://localhost:3000/200 --output downloaded_200.jpg
+
+# DELETE — видаляємо файл з кешу
+curl -v -X DELETE http://localhost:3000/200
+
+# GET для неіснуючого файлу → 404
+curl -v http://localhost:3000/404
+
+# Використання іншого методу → 405
+curl -v -X POST http://localhost:3000/200
