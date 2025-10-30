@@ -1,12 +1,11 @@
-// index.js
-
 import http from 'http';
 import fs from 'fs/promises';
 import path from 'path';
 import { program } from 'commander';
+import superagent from 'superagent';
 
 // --------------------
-// 1️⃣ Підключення CLI через Commander
+// 1️⃣ Commander для CLI
 // --------------------
 program
   .requiredOption('-h, --host <string>', 'server host')
@@ -30,11 +29,12 @@ function getCacheFilePath(code) {
 }
 
 // --------------------
-// 3️⃣ Створення HTTP-сервера
+// 3️⃣ HTTP сервер
 // --------------------
 const server = http.createServer(async (req, res) => {
   const urlParts = req.url.split('/');
   const code = urlParts[1]; // /200 → "200"
+
   if (!code) {
     res.writeHead(400, { 'Content-Type': 'text/plain' });
     res.end('Bad Request: missing code');
@@ -45,10 +45,29 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (req.method === 'GET') {
-      // Читаємо картинку
-      const data = await fs.readFile(filePath);
-      res.writeHead(200, { 'Content-Type': 'image/jpeg' });
-      res.end(data);
+      try {
+        // Спробуємо прочитати з кешу
+        const data = await fs.readFile(filePath);
+        res.writeHead(200, { 'Content-Type': 'image/jpeg' });
+        res.end(data);
+      } catch (err) {
+        if (err.code === 'ENOENT') {
+          // Якщо немає у кеші, запитуємо з http.cat
+          try {
+            const response = await superagent.get(`https://http.cat/${code}`).responseType('blob');
+            const buffer = Buffer.from(await response.body.arrayBuffer ? await response.body.arrayBuffer() : response.body);
+            // Зберігаємо у кеш
+            await fs.writeFile(filePath, buffer);
+            res.writeHead(200, { 'Content-Type': 'image/jpeg' });
+            res.end(buffer);
+          } catch {
+            res.writeHead(404, { 'Content-Type': 'text/plain' });
+            res.end('Not Found');
+          }
+        } else {
+          throw err;
+        }
+      }
 
     } else if (req.method === 'PUT') {
       // Записуємо картинку з тіла запиту
@@ -74,11 +93,9 @@ const server = http.createServer(async (req, res) => {
     }
   } catch (err) {
     if (err.code === 'ENOENT') {
-      // Файл не знайдено
       res.writeHead(404, { 'Content-Type': 'text/plain' });
       res.end('Not Found');
     } else {
-      // Інші помилки
       console.error(err);
       res.writeHead(500, { 'Content-Type': 'text/plain' });
       res.end('Internal Server Error');
@@ -92,3 +109,4 @@ const server = http.createServer(async (req, res) => {
 server.listen(options.port, options.host, () => {
   console.log(`Server running at http://${options.host}:${options.port}/`);
 });
+
