@@ -12,3 +12,9 @@ curl -v http://localhost:3000/404
 
 # Використання іншого методу → 405
 curl -v -X POST http://localhost:3000/200
+
+# GET картинка, яка немає в кеші, бере з http.cat
+curl -v http://localhost:3000/404 --output downloaded_404.jpg
+
+# GET для неіснуючого коду → 404
+curl -v http://localhost:3000/999
