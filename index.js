@@ -4,9 +4,9 @@ import path from 'path';
 import { program } from 'commander';
 import superagent from 'superagent';
 
-// --------------------
-// 1️⃣ Налаштування CLI (commander)
-// --------------------
+// ===========================
+// 1️⃣ Налаштування CLI
+// ===========================
 program
   .requiredOption('-h, --host <string>', 'server host')
   .requiredOption('-p, --port <number>', 'server port')
@@ -14,26 +14,25 @@ program
 
 program.parse(process.argv);
 const options = program.opts();
-
 const cacheDir = options.cache;
 
-// Створюємо директорію кешу, якщо її немає
+// Створюємо кеш-папку, якщо її ще нема
 await fs.mkdir(cacheDir, { recursive: true });
 console.log(`🗂️ Cache directory ready: ${cacheDir}`);
 
-// --------------------
-// 2️⃣ Функція для шляху до файлу в кеші
-// --------------------
+// ===========================
+// 2️⃣ Функція для побудови шляху до файлу у кеші
+// ===========================
 function getCacheFilePath(code) {
   return path.join(cacheDir, `${code}.jpg`);
 }
 
-// --------------------
-// 3️⃣ Створення HTTP сервера
-// --------------------
+// ===========================
+// 3️⃣ HTTP сервер
+// ===========================
 const server = http.createServer(async (req, res) => {
   const urlParts = req.url.split('/');
-  const code = urlParts[1]; // /200 → "200"
+  const code = urlParts[1]; // Наприклад: /200 → "200"
 
   if (!code) {
     res.writeHead(400, { 'Content-Type': 'text/plain' });
@@ -42,28 +41,34 @@ const server = http.createServer(async (req, res) => {
   }
 
   const filePath = getCacheFilePath(code);
+  console.log(`Запит: ${req.method} ${req.url}`);
 
   try {
     if (req.method === 'GET') {
       try {
-        // 1️⃣ Спробуємо прочитати з кешу
+        // 🔹 Пробуємо знайти у кеші
         const data = await fs.readFile(filePath);
+        console.log(`✅ Взято з кешу: ${filePath}`);
         res.writeHead(200, { 'Content-Type': 'image/jpeg' });
         res.end(data);
-        console.log(`✅ Sent from cache: ${filePath}`);
+
       } catch (err) {
         if (err.code === 'ENOENT') {
-          // 2️⃣ Якщо нема у кеші — завантажуємо з http.cat
+          // 🔹 Якщо нема у кеші — завантажуємо з http.cat
+          console.log(`⬇️ Завантажую з https://http.cat/${code}.jpg ...`);
           try {
-            const response = await superagent.get(`https://http.cat/${code}.jpg`).responseType('arraybuffer');
+            const response = await superagent
+              .get(`https://http.cat/${code}.jpg`)
+              .responseType('arraybuffer');
+
             const buffer = Buffer.from(response.body);
-            // Зберігаємо в кеш
-            await fs.writeFile(filePath, buffer);
+            await fs.writeFile(filePath, buffer); // зберігаємо у кеш
+            console.log(`💾 Збережено у кеш: ${filePath}`);
+
             res.writeHead(200, { 'Content-Type': 'image/jpeg' });
             res.end(buffer);
-            console.log(`⬇️ Downloaded and cached: ${filePath}`);
-          } catch (downloadErr) {
-            console.error(`❌ Failed to fetch from http.cat: ${downloadErr.message}`);
+          } catch (fetchErr) {
+            console.error(`❌ Не знайдено на http.cat/${code}.jpg`);
             res.writeHead(404, { 'Content-Type': 'text/plain' });
             res.end('Not Found');
           }
@@ -72,45 +77,22 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-    } else if (req.method === 'PUT') {
-      // 3️⃣ Отримуємо картинку з тіла запиту
-      const chunks = [];
-      for await (const chunk of req) {
-        chunks.push(chunk);
-      }
-      const buffer = Buffer.concat(chunks);
-      await fs.writeFile(filePath, buffer);
-      res.writeHead(201, { 'Content-Type': 'text/plain' });
-      res.end('Created');
-      console.log(`🆕 File saved: ${filePath}`);
-
-    } else if (req.method === 'DELETE') {
-      // 4️⃣ Видаляємо картинку
-      await fs.unlink(filePath);
-      res.writeHead(200, { 'Content-Type': 'text/plain' });
-      res.end('Deleted');
-      console.log(`🗑️ File deleted: ${filePath}`);
-
     } else {
-      // 5️⃣ Будь-які інші методи — 405
+      // Якщо метод не GET
       res.writeHead(405, { 'Content-Type': 'text/plain' });
       res.end('Method not allowed');
     }
+
   } catch (err) {
-    if (err.code === 'ENOENT') {
-      res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end('Not Found');
-    } else {
-      console.error(err);
-      res.writeHead(500, { 'Content-Type': 'text/plain' });
-      res.end('Internal Server Error');
-    }
+    console.error('⚠️ Помилка:', err);
+    res.writeHead(500, { 'Content-Type': 'text/plain' });
+    res.end('Internal Server Error');
   }
 });
 
-// --------------------
+// ===========================
 // 4️⃣ Запуск сервера
-// --------------------
+// ===========================
 server.listen(options.port, options.host, () => {
   console.log(`🚀 Server running at http://${options.host}:${options.port}/`);
 });
