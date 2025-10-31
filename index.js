@@ -5,7 +5,7 @@ import { program } from 'commander';
 import superagent from 'superagent';
 
 // --------------------
-// 1️⃣ Commander для CLI
+// 1️⃣ Налаштування CLI (commander)
 // --------------------
 program
   .requiredOption('-h, --host <string>', 'server host')
@@ -17,19 +17,19 @@ const options = program.opts();
 
 const cacheDir = options.cache;
 
-// Створюємо кеш директорію, якщо її нема
+// Створюємо директорію кешу, якщо її немає
 await fs.mkdir(cacheDir, { recursive: true });
-console.log(`Cache directory ready: ${cacheDir}`);
+console.log(`🗂️ Cache directory ready: ${cacheDir}`);
 
 // --------------------
-// 2️⃣ Функція для шляху до картинки
+// 2️⃣ Функція для шляху до файлу в кеші
 // --------------------
 function getCacheFilePath(code) {
   return path.join(cacheDir, `${code}.jpg`);
 }
 
 // --------------------
-// 3️⃣ HTTP сервер
+// 3️⃣ Створення HTTP сервера
 // --------------------
 const server = http.createServer(async (req, res) => {
   const urlParts = req.url.split('/');
@@ -46,21 +46,24 @@ const server = http.createServer(async (req, res) => {
   try {
     if (req.method === 'GET') {
       try {
-        // Спробуємо прочитати з кешу
+        // 1️⃣ Спробуємо прочитати з кешу
         const data = await fs.readFile(filePath);
         res.writeHead(200, { 'Content-Type': 'image/jpeg' });
         res.end(data);
+        console.log(`✅ Sent from cache: ${filePath}`);
       } catch (err) {
         if (err.code === 'ENOENT') {
-          // Якщо немає у кеші, запитуємо з http.cat
+          // 2️⃣ Якщо нема у кеші — завантажуємо з http.cat
           try {
-            const response = await superagent.get(`https://http.cat/${code}`).responseType('blob');
-            const buffer = Buffer.from(await response.body.arrayBuffer ? await response.body.arrayBuffer() : response.body);
-            // Зберігаємо у кеш
+            const response = await superagent.get(`https://http.cat/${code}.jpg`).responseType('arraybuffer');
+            const buffer = Buffer.from(response.body);
+            // Зберігаємо в кеш
             await fs.writeFile(filePath, buffer);
             res.writeHead(200, { 'Content-Type': 'image/jpeg' });
             res.end(buffer);
-          } catch {
+            console.log(`⬇️ Downloaded and cached: ${filePath}`);
+          } catch (downloadErr) {
+            console.error(`❌ Failed to fetch from http.cat: ${downloadErr.message}`);
             res.writeHead(404, { 'Content-Type': 'text/plain' });
             res.end('Not Found');
           }
@@ -70,7 +73,7 @@ const server = http.createServer(async (req, res) => {
       }
 
     } else if (req.method === 'PUT') {
-      // Записуємо картинку з тіла запиту
+      // 3️⃣ Отримуємо картинку з тіла запиту
       const chunks = [];
       for await (const chunk of req) {
         chunks.push(chunk);
@@ -79,15 +82,17 @@ const server = http.createServer(async (req, res) => {
       await fs.writeFile(filePath, buffer);
       res.writeHead(201, { 'Content-Type': 'text/plain' });
       res.end('Created');
+      console.log(`🆕 File saved: ${filePath}`);
 
     } else if (req.method === 'DELETE') {
-      // Видаляємо картинку
+      // 4️⃣ Видаляємо картинку
       await fs.unlink(filePath);
       res.writeHead(200, { 'Content-Type': 'text/plain' });
       res.end('Deleted');
+      console.log(`🗑️ File deleted: ${filePath}`);
 
     } else {
-      // Інші методи
+      // 5️⃣ Будь-які інші методи — 405
       res.writeHead(405, { 'Content-Type': 'text/plain' });
       res.end('Method not allowed');
     }
@@ -107,6 +112,5 @@ const server = http.createServer(async (req, res) => {
 // 4️⃣ Запуск сервера
 // --------------------
 server.listen(options.port, options.host, () => {
-  console.log(`Server running at http://${options.host}:${options.port}/`);
+  console.log(`🚀 Server running at http://${options.host}:${options.port}/`);
 });
-
